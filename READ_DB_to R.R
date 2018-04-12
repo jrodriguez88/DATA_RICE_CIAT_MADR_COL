@@ -16,7 +16,12 @@ if(require(openxlsx)==FALSE){install.packages("openxlsx")}
 #VVME	-73.4743	4.0294	315
 #YOCS	-72.2983	5.3302	250
 
-
+local <- "AIHU"
+CROP_SYS <- "IRRIGATED" 
+ESTAB <- "DIRECT-SEED"
+LAT <- 3.253
+LON <- -75.24
+ALT <- 380
 
 read_INPUT_data <- function(filename) {
     sheets <- readxl::excel_sheets(filename)
@@ -26,12 +31,6 @@ read_INPUT_data <- function(filename) {
 }
 INPUT_data <- read_INPUT_data("AIPE ENSAYOS  MADR.xlsx")
 
-local <- "AIHU"
-CROP_SYS <- "IRRIGATED" 
-ESTAB <- "DIRECT-SEED"
-LAT <- 3.253
-LON <- -75.24
-ALT <- 380
 
 extract_id <- function(tb){
     id <- mutate(tb,ID=paste0(substr(gsub('^(.{1}).', local, x = tb$siembra),1,4),
@@ -223,6 +222,19 @@ MT <- INPUT_data$MSTOT %>%
            CULTIVAR=genot,
            SAMPLING_DATE=as.Date(fmues, format("%m.%d.%Y")))%>%
     dplyr::select(ID, CULTIVAR, SAMPLING_DATE,WAGT_OBS, WAGT_SD)
+
+
+###### Read Weather data
+WDATA <- INPUT_data$`QC CLIMA 2013 - 2016` %>% 
+    tbl_df() %>%
+    mutate(DATE = as.Date(Date, format("%m.%d.%Y")),
+           RAIN = Rain,
+           SRAD = RF_CCM2_ESOL*0.041868,
+           RHUM = RHUM_FUS) %>%
+    dplyr::select()
+    
+
+
 
 
 #### Merge df to PLANT_gro
