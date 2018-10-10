@@ -4,9 +4,9 @@
 
 #### Package and INPUTS Requeriments
 
-if(require(dplyr)==FALSE){install.packages("dplyr")}
-if(require(stringr)==FALSE){install.packages("stringr")}
+if(require(tidyverse)==FALSE){install.packages("tidyverse")}
 if(require(openxlsx)==FALSE){install.packages("openxlsx")}
+
 
 #### CORDINATES
 #LOC_ID	LON	LAT	ALT
@@ -60,12 +60,12 @@ trial_info <- INPUT_data$`GENERALIDADES DEL ENSAYO`%>%
 
 plant_density <- INPUT_data$`REP MUESTREOS`%>%
     group_by(genot,siembra)%>%
-    summarize_all(funs(mean), na.rm=TRUE)%>%
+    summarize_all(funs(mean, sd), na.rm=TRUE)%>%
     tbl_df()%>%
     extract_id()%>%
     mutate(CULTIVAR=genot,
            id_s=substr(ID,5,nchar(ID)))%>%
-    select(ID, id_s, CULTIVAR, planxmetro)
+    select(ID, id_s, CULTIVAR, planxmetro_mean, planxmetro_sd)
 
 
 #grep(pattern = substr(colnames(trial_info)[2:ncol(trial_info)],1, 6), x = plant_density$ID)
@@ -79,7 +79,7 @@ row_spa <- cbind(id_s, dist_s)%>%
     mutate(dist_s=as.numeric(dist_s))
 
 plant_density <- dplyr::left_join(plant_density, row_spa, by="id_s")%>%
-    mutate(NPLDS=round(planxmetro*(1/dist_s)))
+    mutate(NPLDS=round(planxmetro_mean*(1/dist_s)))
 
 for (i in 1:nrow(plant_density)){
     
@@ -223,23 +223,113 @@ MT <- INPUT_data$MSTOT %>%
            SAMPLING_DATE=as.Date(fmues, format("%m.%d.%Y")))%>%
     dplyr::select(ID, CULTIVAR, SAMPLING_DATE,WAGT_OBS, WAGT_SD)
 
+NH <- INPUT_data$NHV %>%
+    na.omit()%>%
+    tbl_df()%>%
+    extract_id()%>%
+    mutate(NLV_OBS=round(NHVm2), 
+           NLV_SD=round(stderr_mean__1),
+           CULTIVAR=genot,
+           SAMPLING_DATE=as.Date(fmues, format("%m.%d.%Y")))%>%
+    dplyr::select(ID, CULTIVAR, SAMPLING_DATE,NLV_OBS, NLV_SD)
+
+NS <- INPUT_data$NTALL %>%
+    na.omit()%>%
+    tbl_df()%>%
+    extract_id()%>%
+    mutate(NST_OBS=round(NTALLm2), 
+           NST_SD=round(stderr_mean__1),
+           CULTIVAR=genot,
+           SAMPLING_DATE=as.Date(fmues, format("%m.%d.%Y")))%>%
+    dplyr::select(ID, CULTIVAR, SAMPLING_DATE,NST_OBS, NST_SD)
+
+NP <- INPUT_data$NPAN %>%
+    na.omit()%>%
+    tbl_df()%>%
+    extract_id()%>%
+    mutate(NP_OBS=round(NPANm2), 
+           NP_SD=round(stderr_mean__1),
+           CULTIVAR=genot,
+           SAMPLING_DATE=as.Date(fmues, format("%m.%d.%Y")))%>%
+    dplyr::select(ID, CULTIVAR, SAMPLING_DATE,NP_OBS, NP_SD)
 
 ###### Read Weather data
 WDATA <- INPUT_data$`QC CLIMA 2013 - 2016` %>% 
     tbl_df() %>%
     mutate(DATE = as.Date(Date, format("%m.%d.%Y")),
+           DAY = day(Date),
+           MONTH = month(Date),
+           YEAR = year(Date),
            RAIN = Rain,
            SRAD = RF_CCM2_ESOL*0.041868,
            RHUM = RHUM_FUS) %>%
-    dplyr::select()
+    dplyr::select(DATE, TMAX, TMIN, RAIN, SRAD, RHUM)
     
+#library(ggplot2)
+#ggplot(data=WDATA, aes(x=as.factor(month(DATE)), y=TMAX)) + geom_boxplot()
+
+##### Read Soil Data
+
+#Sol_dat <- 
 
 
 
+
+
+### Read YIELD data
+
+YIELD_raw <- INPUT_data$`REP RTO Y COMPONENTES` %>%
+    tbl_df()%>%
+    extract_id()%>%
+    mutate(LOC_ID = local,
+           CULTIVAR=genot,
+           YIELD_LM= RTO_ML,
+           YIELD_AREA= RTO_AREA,
+           YIELD_CD= RTO_CD, 
+           YIELD_POT1= NTXM2*GXPAN*(P1000G/1000)*10,
+           YIELD_POT2= NPXM2*GLLXPAN*(P1000G/1000)*10) %>%
+#           YIELD_AVG= mean(c(RTO_ML, RTO_AREA, RTO_CD), na.rm = T)) %>%
+    dplyr::select(ID, LOC_ID, CULTIVAR, YIELD_LM, YIELD_AREA, YIELD_CD, YIELD_POT1, YIELD_POT2, IC, PFERT, P1000G, NPXM2, NTXM2, GLLXPAN, GXPAN)
+
+
+YIELD_raw %>% select(1:6) %>% gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, LOC_ID, CULTIVAR)) %>%
+    mutate(label_id=substr(ID, 5, nchar(ID)))%>%
+    ggplot(aes(label_id, YIELD_V, color=YIELD_M))+
+    stat_summary(fun.data=mean_cl_boot, position = position_dodge(width=0.2))+
+    facet_wrap(~CULTIVAR, scales = "free_x")+
+    theme_bw()+ theme(axis.text.x = element_text(angle = 45))
+
+#YIELD_raw %>% select(1:7) %>% gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, LOC_ID, CULTIVAR)) %>%
+#    mutate(label_id=substr(ID, 5, nchar(ID)))%>%
+#    ggplot(aes(label_id, YIELD_V, fill=YIELD_M))+geom_boxplot()+facet_wrap(~CULTIVAR, scales = "free_x")+
+#    theme_bw()+ theme(axis.text.x = element_text(angle = 45))
+
+
+#yield_stat <- YIELD_raw %>% select(1:7) %>% 
+#    gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, LOC_ID, CULTIVAR)) %>% 
+#    group_by(CULTIVAR, ID, YIELD_M) %>%
+#    summarise_at("YIELD_V", .funs=c(y=mean, ymin=min, ymax=max), na.rm=T)
+#    
+#    summarise(y=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[1],
+#           ymin=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[2],
+#           ymax=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[3])
+
+YIELD_obs <- INPUT_data$`RTO - COMP E INDICADORES` %>%
+    tbl_df()%>%
+    extract_id()%>%
+    mutate(LOC_ID = local,
+           CULTIVAR=genot,
+           
+           
 
 #### Merge df to PLANT_gro
+
+ORG_Num <- Reduce(function(x, y) {merge(x, y, all.x=TRUE)}, list(NH, NS, NP))%>%
+    tbl_df()%>%
+    mutate(LOC_ID=local)%>%
+    dplyr::select(ID, LOC_ID, everything())
     
-PLANT_gro <- Reduce(function(x, y) {merge(x, y, all.x=TRUE)}, list(HV, AF, HM, ST,  MP, MT))%>%
+PLANT_gro <- Reduce(function(x, y) {merge(x, y, all.x=TRUE)}, list(HV, AF, HM, ST,  MP, MT, ORG_Num))%>%
         tbl_df()%>%
         mutate(LOC_ID=local)%>%
         dplyr::select(ID, LOC_ID, everything())
@@ -259,6 +349,8 @@ PLANT_gro <- Reduce(function(x, y) {merge(x, y, all.x=TRUE)}, list(HV, AF, HM, S
         
   }   
  
+
+
 
 ## ORYZA BIOMASS must have integer sum(WLVG_OBS,WLVD_OBS,WST_OBS,WSO_OBS)==WAGT_OBS
 
@@ -295,10 +387,15 @@ AGRO_man <- split(AGRO_man, AGRO_man$CULTIVAR)
 PLANT_gro <- split(PLANT_gro, PLANT_gro$CULTIVAR)
 PHEN_obs <- split(PHEN_obs, PHEN_obs$CULTIVAR)
 FERT_obs <- split(FERT_obs, FERT_obs$CULTIVAR) 
+WTH_obs <- WDATA
 
 for (i in 1:length(AGRO_man)) {
     
-    list_of_datasets <- list("AGRO_man" = AGRO_man[[i]], "PHEN_obs" = arrange(PHEN_obs[[i]], PHEN_obs[[i]]$ID), "FERT_obs"= FERT_obs[[i]], "PLANT_gro" = PLANT_gro[[i]])
+    list_of_datasets <- list("AGRO_man" = AGRO_man[[i]],
+                             "PHEN_obs" = arrange(PHEN_obs[[i]], PHEN_obs[[i]]$ID), 
+                             "FERT_obs" = FERT_obs[[i]], 
+                             "PLANT_gro"= PLANT_gro[[i]],
+                             "WTH_obs"  = WTH_obs)
     write.xlsx(list_of_datasets, file = paste0(local,"_",names(AGRO_man)[i],".xlsx"))
     
 }
