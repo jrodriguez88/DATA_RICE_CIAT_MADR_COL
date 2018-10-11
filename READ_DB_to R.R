@@ -4,9 +4,12 @@
 
 #### Package and INPUTS Requeriments
 
-if(require(tidyverse)==FALSE){install.packages("tidyverse")}
-if(require(openxlsx)==FALSE){install.packages("openxlsx")}
-
+#if(require(tidyverse)==FALSE){install.packages("tidyverse")}
+#if(require(openxlsx)==FALSE){install.packages("openxlsx")}
+library(tidyverse)
+library(lubridate)
+library(openxlsx)
+library(Hmisc)
 
 #### CORDINATES
 #LOC_ID	LON	LAT	ALT
@@ -305,22 +308,48 @@ YIELD_raw %>% select(1:6) %>% gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, 
 #    theme_bw()+ theme(axis.text.x = element_text(angle = 45))
 
 
-#yield_stat <- YIELD_raw %>% select(1:7) %>% 
-#    gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, LOC_ID, CULTIVAR)) %>% 
-#    group_by(CULTIVAR, ID, YIELD_M) %>%
+yield_stat <- YIELD_raw %>% select(1:6) %>% 
+    gather(key= "YIELD_M", value =  "YIELD_V", -c(ID, LOC_ID, CULTIVAR)) %>% 
+    group_by(CULTIVAR, ID) %>%
 #    summarise_at("YIELD_V", .funs=c(y=mean, ymin=min, ymax=max), na.rm=T)
 #    
-#    summarise(y=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[1],
-#           ymin=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[2],
-#           ymax=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[3])
+    summarise(y=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[1],
+           ymin=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[2],
+           ymax=smean.cl.boot(YIELD_V, conf.int=.95, B=1000, na.rm=TRUE, reps=FALSE)[3])
 
 YIELD_obs <- INPUT_data$`RTO - COMP E INDICADORES` %>%
     tbl_df()%>%
     extract_id()%>%
     mutate(LOC_ID = local,
-           CULTIVAR=genot,
-           
-           
+           CULTIVAR = genot,
+           YIELD_LM = RTO_ML,
+           Y_LM_SD = stderr_mean,
+           YIELD_AREA = RTO_AREA,
+           Y_AREA_SD = stderr_mean__1,
+           YIELD_CD = RTO_CD,
+           Y_CD_SD = stderr_mean__2,
+           HIAD = IC,
+           HIAD_SD = stderr_mean__3,
+           PAN_fert = PFERT,
+           PAN_fert_SD = stderr_mean__4,
+           GW1000 = P1000G,
+           GW1000_SD = stderr_mean__6,
+           ST_M2 = NTXM2,
+           ST_M2_SD = stderr_mean__8,
+           PAN_M2 = NPXM2,
+           PAN_M2_SD = stderr_mean__7,
+           GT_PAN = GXPAN,
+           GT_PAN_SD = stderr_mean__11,
+           GF_PAN = GLLXPAN,
+           GF_PAN_SD = stderr_mean__10)%>%
+    select(ID, LOC_ID, CULTIVAR, contains("_LM"),
+           contains("_AREA"), contains("_CD"), contains("HIAD"), contains("_fert"),
+           contains("GW1000"), contains("ST_M2"), contains("PAN_M2"),
+           contains("GT_PAN"), contains("GT_PAN"))%>%
+    left_join(yield_stat)%>%
+    select(-contains("RTO"))%>%
+    rename(YIELD_AVG=y, YIELD_MIN=ymin, YIELD_MAX=ymax)
+    
 
 #### Merge df to PLANT_gro
 
@@ -388,6 +417,7 @@ PLANT_gro <- split(PLANT_gro, PLANT_gro$CULTIVAR)
 PHEN_obs <- split(PHEN_obs, PHEN_obs$CULTIVAR)
 FERT_obs <- split(FERT_obs, FERT_obs$CULTIVAR) 
 WTH_obs <- WDATA
+YIELD_obs <- split(YIELD_obs, YIELD_obs$CULTIVAR)
 
 for (i in 1:length(AGRO_man)) {
     
@@ -395,6 +425,7 @@ for (i in 1:length(AGRO_man)) {
                              "PHEN_obs" = arrange(PHEN_obs[[i]], PHEN_obs[[i]]$ID), 
                              "FERT_obs" = FERT_obs[[i]], 
                              "PLANT_gro"= PLANT_gro[[i]],
+                             "YIELD_obs"= YIELD_obs[[i]],
                              "WTH_obs"  = WTH_obs)
     write.xlsx(list_of_datasets, file = paste0(local,"_",names(AGRO_man)[i],".xlsx"))
     
